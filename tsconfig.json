@@ -1,0 +1,15 @@
+
+{
+  "extends": "@react-native/typescript-config",
+  "compilerOptions": {
+    "types": ["jest"]
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "Screens/About.tsx",
+    "AuthScreens/Registeration.tsx",
+    "Store/KeyChainStorage.js"
+  ],
+  "exclude": ["**/node_modules", "**/Pods"]
+}
