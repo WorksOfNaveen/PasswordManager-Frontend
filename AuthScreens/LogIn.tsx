@@ -1,9 +1,10 @@
-import { Alert, Button, StyleSheet, Text, TextInput, View } from 'react-native';
-import React, { useState } from 'react';
+import {Alert, Button, StyleSheet, Text, TextInput, View} from 'react-native';
+import React, {useState} from 'react';
 import apiClient from '../API/AuthApi';
-import { AuthStore } from '../Store/store';
-import { KeychainManager } from '../Store/KeyChainStorage';
-import { AxiosError } from 'axios';
+import {AuthStore} from '../Store/store';
+import {KeychainManager} from '../Store/KeyChainStorage';
+import {AxiosError} from 'axios';
+import {useNavigation} from '@react-navigation/native';
 
 interface FormData {
   email: string;
@@ -15,6 +16,9 @@ interface AxiosResponseType {
   refreshToken: string;
   accessToken: string;
   success: boolean;
+  user: object;
+  salt: string;
+  verifyHash: string;
 }
 
 const LogIn = () => {
@@ -23,8 +27,15 @@ const LogIn = () => {
     password: '',
   });
 
-  const setLog = AuthStore(state => state.setLogged);
+  const navigation = useNavigation<any>();
+  // const setLog = AuthStore(state => state.setLogged);
   const [showPassword, setShowPassword] = useState<boolean>(false);
+
+  // setting the auth data in the zustand so we can use that data in masterpassword screeen
+  const setAuthData = AuthStore(state => state.setAuthData);
+
+  // Remove the commented setLog - we'll handle navigation via state changes
+  // const setLog = AuthStore(state => state.setLogged);
 
   const updateField = (name: keyof FormData, value: string) => {
     setForm(prevState => ({
@@ -36,23 +47,35 @@ const LogIn = () => {
   const submitButton = async (): Promise<void> => {
     try {
       const res = await apiClient.post<AxiosResponseType>('/auth/login', {
-        email: form.email.trim(),
-        password: form.password.trim(),
+        email: form.email,
+        password: form.password,
       });
 
       if (res.data.success) {
-        // 🔐 Save tokens
+        // Save auth data first
+        setAuthData({
+          salt: res.data.salt,
+          verifyHash: res.data.verifyHash,
+        });
+
+        // Save tokens
         await KeychainManager.saveTokens(
           res.data.accessToken,
           res.data.refreshToken,
         );
 
-        setLog(true);
-
-        Alert.alert('Login', 'Logged successfully 👌');
+        Alert.alert('Login', 'Logged successfully 👌', [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate after alert is confirmed
+              navigation.navigate('MasterPassword');
+            },
+          },
+        ]);
       }
     } catch (err) {
-      const error = err as AxiosError<{ message?: string }>;
+      const error = err as AxiosError<{message?: string}>;
 
       if (error.response) {
         Alert.alert(
@@ -98,8 +121,7 @@ const LogIn = () => {
 
           <Text
             style={styles.visibilityToggle}
-            onPress={() => setShowPassword(prev => !prev)}
-          >
+            onPress={() => setShowPassword(prev => !prev)}>
             {showPassword ? '👁️' : '🙈'}
           </Text>
         </View>
@@ -109,6 +131,15 @@ const LogIn = () => {
           onPress={submitButton}
           disabled={!form.email || !form.password}
         />
+
+        <Text style={styles.linkText}>
+          Don't have an account?{' '}
+          <Text
+            style={styles.link}
+            onPress={() => navigation.navigate('Registeration')}>
+            Register here
+          </Text>
+        </Text>
       </View>
     </View>
   );
@@ -158,6 +189,15 @@ const styles = StyleSheet.create({
     fontSize: 20,
     marginLeft: 10,
     paddingVertical: 8,
+  },
+  linkText: {
+    marginTop: 15,
+    textAlign: 'center',
+    color: '#666',
+  },
+  link: {
+    color: '#007AFF',
+    fontWeight: 'bold',
   },
 });
 export default LogIn;

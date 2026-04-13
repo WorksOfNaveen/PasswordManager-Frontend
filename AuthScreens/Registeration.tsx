@@ -1,6 +1,9 @@
-import { StyleSheet, Text, View, TextInput, Button } from 'react-native';
-import React, { useState } from 'react';
+import {StyleSheet, Text, View, TextInput, Button, Alert} from 'react-native';
+import React, {useState} from 'react';
+import {useNavigation} from '@react-navigation/native';
 import apiClient from '../API/AuthApi';
+import {setUpMasterPassword} from '../Encryption/vault';
+import {AuthStore} from '../Store/store';
 
 // 1. Move Interface outside the component
 interface FormData {
@@ -10,53 +13,89 @@ interface FormData {
 }
 
 const Registeration = () => {
+  const navigation = useNavigation<any>();
+  const setKey = AuthStore(state => state.setKey);
+
   // 2. Tell useState it's using the FormData interface
-  const [form, setForm] = useState<FormData>({
+  const [fillForm, setfillForm] = useState<FormData>({
     name: '',
     email: '',
     password: '',
   });
-
+  const [mpassword, setmpassword] = useState<string>('');
   // Add password visibility state
   const [showPassword, setShowPassword] = useState(false);
+  const [showMpassword, setShowMpassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // 3. Logic stays the same (this is perfect)
   function updateField(name: keyof FormData, value: string): void {
-    setForm(prevState => ({
+    setfillForm(prevState => ({
       ...prevState,
       [name]: value,
     }));
   }
+
   const registerButton = async (form: FormData) => {
+    // Validation
+    if (!form.name || !form.email || !form.password || !mpassword) {
+      Alert.alert('Error', 'Please fill all fields');
+      return;
+    }
+
+    if (form.password !== mpassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
+    setLoading(true);
     try {
-      const res = await apiClient.post('/auth/register', form);
-      console.log('Success:', res.data);
-      // Handle success (navigate, show message, etc.)
+      // get the key and auth from the setUpMasterPassword
+      const {key, auth} = setUpMasterPassword(mpassword);
+
+      const completeData = {
+        ...form,
+        verifyHash: auth.verifyHash,
+        salt: auth.salt,
+      };
+      const res = await apiClient.post('/auth/register', completeData);
+
+      Alert.alert('Message', res.data.message);
+      setKey(key);
+      navigation.navigate('LogIn');
     } catch (error: any) {
+      Alert.alert(
+        'Registration Failed',
+        error.response?.data?.message || error.message,
+      );
       console.error('Error:', error.response?.data || error.message);
-      // Show error to user
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <View style={styles.wholeContainer}>
       <View style={styles.container}>
-        <Text>Name</Text>
+        <Text style={styles.header}>Register</Text>
+
+        <Text>Full Name</Text>
         <TextInput
           style={styles.input}
           placeholder="Full Name"
-          value={form.name} // 4. Always link value to state
-          onChangeText={text => updateField('name', text)} // 5. Pass BOTH arguments
+          value={fillForm.name}
+          onChangeText={text => updateField('name', text)}
+          autoCapitalize="words"
         />
 
         <Text>Email</Text>
         <TextInput
           style={styles.input}
           placeholder="Email Address"
-          value={form.email}
+          value={fillForm.email}
           autoCapitalize="none"
           autoCorrect={false}
-          onChangeText={text => updateField('email', text)} // Pass 'email' as the key
+          keyboardType="email-address"
+          onChangeText={text => updateField('email', text)}
         />
 
         <Text>Password</Text>
@@ -64,7 +103,7 @@ const Registeration = () => {
           <TextInput
             placeholder="Password"
             style={styles.passwordInput}
-            value={form.password}
+            value={fillForm.password}
             autoCapitalize="none"
             autoCorrect={false}
             onChangeText={text => updateField('password', text)}
@@ -72,13 +111,42 @@ const Registeration = () => {
           />
           <Text
             style={styles.visibilityToggle}
-            onPress={() => setShowPassword(!showPassword)}
-          >
-            {showPassword ? '👁️' : '👁️‍🗨️'}
+            onPress={() => setShowPassword(!showPassword)}>
+            {showPassword ? '👁️' : '🙈'}
           </Text>
         </View>
+
+        <Text>Master Password</Text>
+        <View style={styles.passwordContainer}>
+          <TextInput
+            placeholder="Master Password"
+            style={styles.passwordInput}
+            value={mpassword}
+            autoCapitalize="none"
+            autoCorrect={false}
+            onChangeText={setmpassword}
+            secureTextEntry={!showMpassword}
+          />
+          <Text
+            style={styles.visibilityToggle}
+            onPress={() => setShowMpassword(!showMpassword)}>
+            {showMpassword ? '👁️' : '🙈'}
+          </Text>
+        </View>
+
+        <Button
+          title={loading ? 'Registering...' : 'Register'}
+          onPress={() => registerButton(fillForm)}
+          disabled={loading}
+        />
+
+        <Text style={styles.linkText}>
+          Already have an account?{' '}
+          <Text style={styles.link} onPress={() => navigation.goBack()}>
+            Log in here
+          </Text>
+        </Text>
       </View>
-      <Button title="Register" onPress={() => registerButton(form)} />
     </View>
   );
 };
@@ -99,7 +167,15 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#fff',
   },
-
+  header: {
+    fontSize: 16,
+    letterSpacing: 2,
+    color: '#000000',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
   input: {
     borderBottomWidth: 1,
     borderColor: '#ccc', // 👈 avoids harsh black lines
@@ -124,5 +200,14 @@ const styles = StyleSheet.create({
     fontSize: 20,
     marginLeft: 10,
     paddingVertical: 8,
+  },
+  linkText: {
+    marginTop: 15,
+    textAlign: 'center',
+    color: '#666',
+  },
+  link: {
+    color: '#007AFF',
+    fontWeight: 'bold',
   },
 });

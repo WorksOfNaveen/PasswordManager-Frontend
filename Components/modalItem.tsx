@@ -15,11 +15,14 @@ import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../Types/types';
 import {usePasswordStore} from '../Store/store';
 import {Ionicons} from '@react-native-vector-icons/ionicons';
+import {decryptVaultItem, encryptVaultItem} from '../Encryption/vault';
+import {AuthStore} from '../Store/store';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'modalItem'>;
 
 export default function ModalItem({route, navigation}: Props) {
   const pwd = route.params?.data;
+  const key = AuthStore(state => state.key);
 
   const [domain, setDomain] = useState('');
   const [username, setUsername] = useState('');
@@ -33,13 +36,52 @@ export default function ModalItem({route, navigation}: Props) {
 
   // Populate data if editing
   useEffect(() => {
-    if (pwd) {
-      setDomain(pwd.domain);
-      setUsername(pwd.username);
-      setEmail(pwd.email);
-      setPassword(pwd.password);
+    if (!key) {
+      Alert.alert(
+        'Error',
+        'Master password key not found. Please login again.',
+      );
+      navigation.goBack();
+      return;
     }
-  }, [pwd]);
+
+    if (pwd && pwd.password) {
+      // Only password field is encrypted - domain, username, email are plain text
+      const vaultItem = {
+        id: pwd._id,
+        domain: pwd.domain,
+        username: pwd.username,
+        email: pwd.email,
+        password: pwd.password, // This is the encrypted password
+      };
+
+      console.log('[ModalItem] Attempting to decrypt password:', {
+        id: pwd._id,
+        domain: pwd.domain,
+        username: pwd.username,
+        email: pwd.email,
+        passwordLength: pwd.password?.length,
+        keyLength: key?.length,
+      });
+
+      const decryptedPwd = decryptVaultItem(vaultItem, key);
+      if (!decryptedPwd) {
+        console.error(
+          '[ModalItem] Decryption failed - password might be corrupted or key mismatch',
+        );
+        Alert.alert('Error', 'Failed to decrypt password. Please try again.');
+        navigation.goBack();
+        return;
+      }
+
+      // Set all fields - domain, username, email are already plain text
+      setDomain(decryptedPwd.domain);
+      setUsername(decryptedPwd.username);
+      setEmail(decryptedPwd.email || '');
+      // Password is decrypted from the vault item
+      setPassword(decryptedPwd.password);
+    }
+  }, [pwd, key, navigation]);
 
   // Keyboard listeners
   useEffect(() => {
@@ -62,15 +104,68 @@ export default function ModalItem({route, navigation}: Props) {
       return;
     }
 
-    const data = {domain, username, email, password};
-
-    if (pwd) {
-      await updatePassword(pwd._id, data);
-    } else {
-      await addPassword(data);
+    if (!key) {
+      Alert.alert('Error', 'Encryption key not found. Please login again.');
+      return;
     }
 
-    navigation.goBack();
+    try {
+      // Encrypt the password before sending to backend
+      const decryptedItem = {
+        id: pwd?._id || '',
+        domain,
+        username,
+        email,
+        password,
+      };
+
+      console.log('[ModalItem] Starting encryption...');
+
+      let encryptedItem;
+      try {
+        encryptedItem = encryptVaultItem(decryptedItem, key);
+      } catch (encryptError) {
+        console.error('[ModalItem] Encryption failed:', encryptError);
+        Alert.alert(
+          'Error',
+          `Encryption failed: ${
+            encryptError instanceof Error
+              ? encryptError.message
+              : 'Unknown error'
+          }`,
+        );
+        return;
+      }
+
+      console.log('[ModalItem] Submitting encrypted password:', {
+        id: encryptedItem.id,
+        domain: encryptedItem.domain,
+        username: encryptedItem.username,
+        encryptedPasswordLength: encryptedItem.password?.length,
+        encryptedPasswordPreview: encryptedItem.password?.substring(0, 80),
+        encryptedPasswordFull: encryptedItem.password,
+        hasColon: encryptedItem.password?.includes(':'),
+      });
+
+      const data = {
+        domain: encryptedItem.domain,
+        username: encryptedItem.username,
+        email,
+        password: encryptedItem.password,
+      };
+
+      if (pwd) {
+        await updatePassword(pwd._id, data);
+      } else {
+        await addPassword(data);
+      }
+      console.log('[ModalItem] Password submitted successfully');
+      navigation.goBack();
+    } catch (error) {
+      console.error('[ModalItem] Error during submission:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Error', `Failed to save password: ${errorMsg}`);
+    }
   };
 
   return (

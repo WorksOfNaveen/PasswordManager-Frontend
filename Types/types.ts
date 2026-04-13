@@ -6,6 +6,11 @@ export type ModalDetails = {
   password: string;
 };
 
+export type AuthData = {
+  salt: string;
+  verifyHash: string;
+};
+
 export type RootStackParamList = {
   Registeration: undefined;
   LogIn: undefined;
@@ -13,5 +18,6 @@ export type RootStackParamList = {
   PasswordList: undefined;
   AddScreen: undefined;
   ListScreen: undefined;
-  modalItem: { data?: ModalDetails } | undefined;
+  modalItem: {data?: ModalDetails} | undefined;
+  MasterPassword: undefined;
 };
