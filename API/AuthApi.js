@@ -1,7 +1,39 @@
 import axios from 'axios';
-import { Platform } from 'react-native';
-import { KeychainManager } from '../Store/KeyChainStorage';
+import {Platform} from 'react-native';
+import {KeychainManager} from '../Store/KeyChainStorage';
 
+// Refresh token endpoint candidates
+const REFRESH_ENDPOINT_CANDIDATES = [
+  '/refresh',
+  '/auth/refresh',
+  '/auth/refreshToken',
+  '/auth/refresh-token',
+];
+
+// Retry refresh with multiple endpoints
+const tryRefresh = async (baseURL, refreshToken) => {
+  let lastError;
+  for (const path of REFRESH_ENDPOINT_CANDIDATES) {
+    try {
+      const res = await axios.post(`${baseURL}${path}`, {
+        refreshToken,
+      });
+      return res;
+    } catch (e) {
+      lastError = e;
+      // If endpoint doesn't exist, try the next one
+      const status = e?.response?.status;
+      if (status === 404) {
+        continue;
+      }
+      // For other errors (401/403/network), stop and surface it
+      throw e;
+    }
+  }
+  throw lastError;
+};
+
+// HTTP client with auto-refresh
 const apiClient = axios.create({
   baseURL:
     Platform.OS === 'android'
@@ -12,6 +44,8 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Add access token to requests
 apiClient.interceptors.request.use(
   async config => {
     const token = await KeychainManager.getAccessToken();
@@ -21,7 +55,8 @@ apiClient.interceptors.request.use(
     return config;
   },
   error => {
-    Promise.reject(error);
+    // Handle 401 with token refresh
+    return Promise.reject(error);
   },
 );
 apiClient.interceptors.response.use(
@@ -36,21 +71,28 @@ apiClient.interceptors.response.use(
           await KeychainManager.clearAllTokens(); //even if we have access tkn we cant use it so we clear all
           return Promise.reject(error);
         }
-        const res = await axios.post(`${apiClient.defaults.baseURL}/refresh`, {
-          refreshToken,
-        });
+
+        const res = await tryRefresh(apiClient.defaults.baseURL, refreshToken);
         //  refreshToken: newRefresh renaming yo newRefresh
-        const { refreshToken: newRefresh, accessToken } = res.data;
+        const {refreshToken: newRefresh, accessToken} = res.data;
         await KeychainManager.saveTokens(accessToken, newRefresh);
 
         // retry original request
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return apiClient(originalRequest);
       } catch (err) {
-        await KeychainManager.clearAllTokens();
+        const status = err?.response?.status;
+        // Only clear tokens if refresh is definitively rejected.
+        if (status === 401 || status === 403) {
+          await KeychainManager.clearAllTokens();
+        }
         return Promise.reject(err);
       }
     }
+
+    // Important: for all other errors, keep the promise rejected.
+    // If we don't, callers may receive `undefined` and crash on `response.data`.
+    return Promise.reject(error);
   },
 );
 export default apiClient;

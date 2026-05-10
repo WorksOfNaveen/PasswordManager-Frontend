@@ -34,61 +34,70 @@ type passwordStore = {
   clearPasswords: () => void;
 };
 
+// Authentication state store
 const AuthStore = create<globalState>(set => ({
   isLogged: false,
   authData: null,
   key: null,
 
+  // Set login status
   setLogged: value => set({isLogged: value}),
+  // Set auth verification data
   setAuthData: data => set({authData: data}),
+  // Set derived vault key
   setKey: value => set({key: value}),
+  // Clear all auth data
   logout: async () => {
     try {
       // 🔐 Clear Keychain tokens
-      console.log('[AuthStore.logout] Clearing Keychain tokens...');
+      // console.log('[AuthStore.logout] Clearing Keychain tokens...');
       await KeychainManager.clearAllTokens();
 
       // 🧹 Clear Zustand store state
-      console.log('[AuthStore.logout] Clearing store state...');
+      // console.log('[AuthStore.logout] Clearing store state...');
       set({isLogged: false, key: null, authData: null});
 
-      console.log(
-        '[AuthStore.logout] Logout complete - all sensitive data cleared',
-      );
+      // console.log(
+      //   '[AuthStore.logout] Logout complete - all sensitive data cleared',
+      // );
     } catch (error) {
-      console.error('[AuthStore.logout] Error during logout:', error);
+      // console.error('[AuthStore.logout] Error during logout:', error);
       // Still clear store state even if Keychain fails
       set({isLogged: false, key: null, authData: null});
     }
   },
 }));
 
+// Password vault state store
 const usePasswordStore = create<passwordStore>(set => ({
   passwords: [],
   loading: false,
+  // Fetch all passwords from backend
   fetchPasswords: async () => {
     try {
       set({loading: true});
       const res = await apiClient.get('/pwd/getPwd');
-      console.log(
-        '[fetchPasswords] First password:',
-        res.data[0]?.password?.substring(0, 50),
-      );
+      // console.log(
+      //   '[fetchPasswords] First password:',
+      //   res.data[0]?.password?.substring(0, 50),
+      // );
       set({passwords: res.data, loading: false});
     } catch (e) {
-      console.log('error fetching passwords', e);
+      // console.log('error fetching passwords', e);
       set({loading: false});
+      // Create new password entry
     }
   },
   addPassword: async data => {
     try {
       const res = await apiClient.post('/pwd/addPwd', data);
       set(state => ({
-        passwords: [...state.passwords, res.data],
+        passwords: [...state.passwords, res.data.data],
       }));
     } catch (error) {
-      console.log(error);
+      // console.log(error);
     }
+    // Update existing password entry
   },
   updatePassword: async (id, data) => {
     try {
@@ -100,8 +109,9 @@ const usePasswordStore = create<passwordStore>(set => ({
         ),
       }));
     } catch (err) {
-      console.log(err);
+      // console.log(err);
     }
+    // Delete password entry
   },
   deletePassword: async id => {
     try {
@@ -110,11 +120,12 @@ const usePasswordStore = create<passwordStore>(set => ({
         passwords: state.passwords.filter(pwd => pwd._id !== id),
       }));
     } catch (error) {}
+    // Clear cached passwords
   },
   clearPasswords: () => {
-    console.log(
-      '[usePasswordStore.clearPasswords] Clearing all cached passwords',
-    );
+    // console.log(
+    //   '[usePasswordStore.clearPasswords] Clearing all cached passwords',
+    // );
     set({passwords: []});
   },
 }));

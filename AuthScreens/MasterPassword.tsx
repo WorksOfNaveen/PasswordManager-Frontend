@@ -1,14 +1,28 @@
-import {Alert, Button, StyleSheet, Text, TextInput, View} from 'react-native';
 import React, {useState, useEffect} from 'react';
+import {
+  Alert,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  TouchableOpacity,
+  StatusBar,
+} from 'react-native';
 import {AuthStore} from '../Store/store';
 import {verifyMasterPassword} from '../Encryption/vault';
-// import {KeychainManager} from '../Store/KeyChainStorage';
+import {KeychainManager} from '../Store/KeyChainStorage';
 import apiClient from '../API/AuthApi';
 import {useNavigation} from '@react-navigation/native';
-// import {NativeStackScreenProps} from '@react-navigation/native-stack';
-// import {RootStackParamList} from '../Types/types';
+import {Ionicons} from '@react-native-vector-icons/ionicons';
 
-// type Props = NativeStackScreenProps<RootStackParamList, 'MasterPassword'>;
+const THEME = {
+  bg: '#111113',
+  surface: '#1c1c1f',
+  border: '#2a2a2f',
+  text: '#f5f5f7',
+  textMuted: '#a1a1aa',
+  accent: '#0a84ff',
+};
 
 const MasterPassword = () => {
   const [showMpassword, setShowMpassword] = useState(false);
@@ -16,38 +30,30 @@ const MasterPassword = () => {
   const [isLoading, setIsLoading] = useState(true);
   const navigation = useNavigation<any>();
 
-  // Get auth data from store
   const auth = AuthStore(state => state.authData);
-
-  // to stay logged in
   const setLog = AuthStore(state => state.setLogged);
-
-  // to set the key
   const setKey = AuthStore(state => state.setKey);
-
-  // to set auth data if missing
   const setAuthData = AuthStore(state => state.setAuthData);
 
-  // Log auth state for debugging
   useEffect(() => {
-    console.log('[MasterPassword] Auth data from store:', {
-      auth: auth
-        ? {
-            salt: auth.salt?.substring(0, 10) + '...',
-            verifyHash: auth.verifyHash?.substring(0, 10) + '...',
-          }
-        : null,
-    });
-
-    // If auth data is missing, try to fetch it from the backend
     if (!auth || !auth.salt || !auth.verifyHash) {
-      console.log(
-        '[MasterPassword] Auth data missing, attempting to fetch from backend...',
-      );
-      fetchAuthData();
+      (async () => {
+        try {
+          const cached = await KeychainManager.getAuthData();
+          if (cached?.salt && cached?.verifyHash) {
+            setAuthData(cached);
+            setIsLoading(false);
+            return;
+          }
+          await fetchAuthData();
+        } catch (e) {
+          await fetchAuthData();
+        }
+      })();
     } else {
       setIsLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchAuthData = async () => {
@@ -60,13 +66,12 @@ const MasterPassword = () => {
           salt: response.data.salt,
           verifyHash: response.data.verifyHash,
         };
-        console.log('[MasterPassword] Auth data fetched successfully');
         setAuthData(authData);
+        await KeychainManager.saveAuthData(authData);
       } else {
         throw new Error('Invalid auth data response');
       }
     } catch (error) {
-      console.error('[MasterPassword] Failed to fetch auth data:', error);
       Alert.alert('Error', 'Failed to load auth data. Please login again.');
     } finally {
       setIsLoading(false);
@@ -75,33 +80,19 @@ const MasterPassword = () => {
 
   const handleProceed = () => {
     if (!auth || !auth.salt || !auth.verifyHash) {
-      console.error('[MasterPassword] Auth data missing:', auth);
       Alert.alert('Error', 'Auth data missing. Please login again.');
       return;
     }
 
-    console.log('[MasterPassword] Attempting verification with auth data:', {
-      salt: auth.salt?.substring(0, 10) + '...',
-      verifyHash: auth.verifyHash?.substring(0, 10) + '...',
-    });
-
     const key = verifyMasterPassword(mpassword, auth);
     if (!key) {
-      console.log('[MasterPassword] Verification FAILED - Incorrect password');
       Alert.alert('Error', 'Master password is incorrect. Please try again.');
       return;
     }
 
-    console.log(
-      '[MasterPassword] Verification SUCCESSFUL - Key derived and saved',
-    );
-
-    // First, store the key and set logged status
     setKey(key);
     setLog(true);
 
-    // Then navigate to ListScreen using navigation.reset to clear the navigation stack
-    console.log('[MasterPassword] Navigating to ListScreen');
     setTimeout(() => {
       navigation.reset({
         index: 0,
@@ -112,36 +103,62 @@ const MasterPassword = () => {
 
   if (isLoading) {
     return (
-      <View style={styles.wholeContainer}>
-        <Text style={styles.header}>🔐 Loading...</Text>
+      <View style={styles.screen}>
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor={THEME.bg}
+          translucent={false}
+        />
+        <View style={styles.card}>
+          <Text style={styles.header}>Loading...</Text>
+          <Text style={styles.subtitle}>Preparing secure vault access</Text>
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.wholeContainer}>
-      <Text style={styles.header}>🔐 Master Password</Text>
-      <Text style={styles.subtitle}>
-        Enter your master password to access your passwords
-      </Text>
-      <View style={styles.passwordContainer}>
-        <TextInput
-          placeholder="Master Password"
-          style={styles.passwordInput}
-          value={mpassword}
-          autoCapitalize="none"
-          autoCorrect={false}
-          onChangeText={setmpassword}
-          secureTextEntry={!showMpassword}
-          editable={!isLoading}
-        />
-        <Text
-          style={styles.visibilityToggle}
-          onPress={() => setShowMpassword(!showMpassword)}>
-          {showMpassword ? '👁️' : '🙈'}
+    <View style={styles.screen}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={THEME.bg}
+        translucent={false}
+      />
+      <View style={styles.card}>
+        <Text style={styles.header}>Master Password</Text>
+        <Text style={styles.subtitle}>
+          Enter your master password to access your passwords
         </Text>
+
+        <View style={styles.inputWrap}>
+          <Ionicons name="key-outline" size={18} color={THEME.textMuted} />
+          <TextInput
+            placeholder="Master Password"
+            placeholderTextColor={THEME.textMuted}
+            style={styles.input}
+            value={mpassword}
+            autoCapitalize="none"
+            autoCorrect={false}
+            onChangeText={setmpassword}
+            secureTextEntry={!showMpassword}
+            editable={!isLoading}
+          />
+          <TouchableOpacity onPress={() => setShowMpassword(!showMpassword)}>
+            <Ionicons
+              name={showMpassword ? 'eye-outline' : 'eye-off-outline'}
+              size={18}
+              color={THEME.textMuted}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.submitButton, isLoading && styles.submitDisabled]}
+          onPress={handleProceed}
+          disabled={isLoading}>
+          <Text style={styles.submitText}>Decrypt</Text>
+        </TouchableOpacity>
       </View>
-      <Button title="Decrypt" onPress={handleProceed} disabled={isLoading} />
     </View>
   );
 };
@@ -149,57 +166,63 @@ const MasterPassword = () => {
 export default MasterPassword;
 
 const styles = StyleSheet.create({
-  wholeContainer: {
+  screen: {
     flex: 1,
-    justifyContent: 'center', // vertical center
-    alignItems: 'center', // horizontal center
-    backgroundColor: '#f2f2f2', //helps visually confirm centering
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    backgroundColor: THEME.bg,
   },
-
-  container: {
-    width: '85%',
-    padding: 20,
-    borderRadius: 10,
-    backgroundColor: '#fff',
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    backgroundColor: THEME.surface,
+    padding: 18,
   },
   header: {
-    fontSize: 18,
-    letterSpacing: 2,
-    color: '#000000',
+    color: THEME.text,
+    fontSize: 30,
     fontWeight: '700',
-    marginBottom: 10,
-    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 20,
+    color: THEME.textMuted,
+    marginTop: 4,
+    marginBottom: 18,
   },
-  input: {
-    borderBottomWidth: 1,
-    borderColor: '#ccc', // 👈 avoids harsh black lines
-    marginBottom: 20,
-    paddingVertical: 8, // 👈 VERY IMPORTANT (fixes “line at top” look)
+  label: {
+    color: THEME.text,
+    marginBottom: 6,
+    fontWeight: '600',
   },
-
-  passwordContainer: {
+  inputWrap: {
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    backgroundColor: '#17171a',
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderColor: '#ccc',
-    marginBottom: 20,
+    marginBottom: 14,
+    gap: 8,
   },
-
-  passwordInput: {
+  input: {
     flex: 1,
-    paddingVertical: 8, // 👈 fixes alignment inside row
+    color: THEME.text,
   },
-
-  visibilityToggle: {
-    fontSize: 20,
-    marginLeft: 10,
-    paddingVertical: 8,
+  submitButton: {
+    height: 50,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: THEME.accent,
+  },
+  submitDisabled: {
+    opacity: 0.6,
+  },
+  submitText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

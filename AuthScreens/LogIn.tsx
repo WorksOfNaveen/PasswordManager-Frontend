@@ -1,5 +1,14 @@
-import {Alert, Button, StyleSheet, Text, TextInput, View} from 'react-native';
 import React, {useState} from 'react';
+import {
+  Alert,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  StatusBar,
+} from 'react-native';
+import {Ionicons} from '@react-native-vector-icons/ionicons';
 import apiClient from '../API/AuthApi';
 import {AuthStore} from '../Store/store';
 import {KeychainManager} from '../Store/KeyChainStorage';
@@ -21,21 +30,24 @@ interface AxiosResponseType {
   verifyHash: string;
 }
 
+const THEME = {
+  bg: '#111113',
+  surface: '#1c1c1f',
+  border: '#2a2a2f',
+  text: '#f5f5f7',
+  textMuted: '#a1a1aa',
+  accent: '#0a84ff',
+};
+
 const LogIn = () => {
   const [form, setForm] = useState<FormData>({
     email: '',
     password: '',
   });
-
-  const navigation = useNavigation<any>();
-  // const setLog = AuthStore(state => state.setLogged);
   const [showPassword, setShowPassword] = useState<boolean>(false);
 
-  // setting the auth data in the zustand so we can use that data in masterpassword screeen
+  const navigation = useNavigation<any>();
   const setAuthData = AuthStore(state => state.setAuthData);
-
-  // Remove the commented setLog - we'll handle navigation via state changes
-  // const setLog = AuthStore(state => state.setLogged);
 
   const updateField = (name: keyof FormData, value: string) => {
     setForm(prevState => ({
@@ -52,23 +64,25 @@ const LogIn = () => {
       });
 
       if (res.data.success) {
-        // Save auth data first
         setAuthData({
           salt: res.data.salt,
           verifyHash: res.data.verifyHash,
         });
 
-        // Save tokens
+        await KeychainManager.saveAuthData({
+          salt: res.data.salt,
+          verifyHash: res.data.verifyHash,
+        });
+
         await KeychainManager.saveTokens(
           res.data.accessToken,
           res.data.refreshToken,
         );
 
-        Alert.alert('Login', 'Logged successfully 👌', [
+        Alert.alert('Login', 'Logged successfully', [
           {
             text: 'OK',
             onPress: () => {
-              // Navigate after alert is confirmed
               navigation.navigate('MasterPassword');
             },
           },
@@ -89,48 +103,70 @@ const LogIn = () => {
         );
       } else {
         Alert.alert('Error', 'Something went wrong.');
-        console.error('Error:', error.message);
       }
     }
   };
 
+  const isDisabled = !form.email || !form.password;
+
   return (
-    <View style={styles.Wholecontainer}>
-      <View style={styles.container}>
-        <Text style={styles.header}>LogIn</Text>
+    <View style={styles.screen}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={THEME.bg}
+        translucent={false}
+      />
+      <View style={styles.card}>
+        <Text style={styles.header}>Welcome Back</Text>
+        <Text style={styles.subtitle}>Sign in to access your passwords</Text>
 
-        <Text>Email</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          value={form.email}
-          onChangeText={(text: string) => updateField('email', text)}
-        />
-
-        <Text>Password</Text>
-        <View style={styles.passwordContainer}>
+        <Text style={styles.label}>Email</Text>
+        <View style={styles.inputWrap}>
+          <Ionicons name="mail-outline" size={18} color={THEME.textMuted} />
           <TextInput
-            style={styles.passwordInput}
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor={THEME.textMuted}
+            value={form.email}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            onChangeText={(text: string) => updateField('email', text)}
+          />
+        </View>
+
+        <Text style={styles.label}>Password</Text>
+        <View style={styles.inputWrap}>
+          <Ionicons
+            name="lock-closed-outline"
+            size={18}
+            color={THEME.textMuted}
+          />
+          <TextInput
+            style={styles.input}
             placeholder="Password"
+            placeholderTextColor={THEME.textMuted}
             value={form.password}
             autoCapitalize="none"
             autoCorrect={false}
-            secureTextEntry={!showPassword} // ✅ FIXED
+            secureTextEntry={!showPassword}
             onChangeText={(text: string) => updateField('password', text)}
           />
-
-          <Text
-            style={styles.visibilityToggle}
-            onPress={() => setShowPassword(prev => !prev)}>
-            {showPassword ? '👁️' : '🙈'}
-          </Text>
+          <TouchableOpacity onPress={() => setShowPassword(prev => !prev)}>
+            <Ionicons
+              name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+              size={18}
+              color={THEME.textMuted}
+            />
+          </TouchableOpacity>
         </View>
 
-        <Button
-          title="Submit"
+        <TouchableOpacity
+          style={[styles.submitButton, isDisabled && styles.submitDisabled]}
           onPress={submitButton}
-          disabled={!form.email || !form.password}
-        />
+          disabled={isDisabled}>
+          <Text style={styles.submitText}>Sign In</Text>
+        </TouchableOpacity>
 
         <Text style={styles.linkText}>
           Don't have an account?{' '}
@@ -144,60 +180,78 @@ const LogIn = () => {
     </View>
   );
 };
+
 const styles = StyleSheet.create({
-  header: {
-    fontSize: 16,
-    letterSpacing: 2,
-    color: '#000000',
-    fontWeight: '700',
-    textDecorationLine: 'none', // 'none' is default, but here for clarity
-    fontStyle: 'normal',
-    // 'small-caps' is passed as an array to fontVariant
-    fontVariant: ['small-caps'],
-    textTransform: 'uppercase',
-  },
-  Wholecontainer: {
+  screen: {
     flex: 1,
-    marginTop: 100, // vertical center
-    alignItems: 'center', // horizontal center
-    backgroundColor: '#f2f2f2', // 👈 helps visually confirm centering
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    backgroundColor: THEME.bg,
   },
-  container: {
-    width: '85%',
-    padding: 20,
-    borderRadius: 10,
-    backgroundColor: '#fff',
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    backgroundColor: THEME.surface,
+    padding: 18,
   },
-  input: {
-    borderBottomWidth: 1,
-    borderColor: '#ccc', // 👈 avoids harsh black lines
-    marginBottom: 20,
-    paddingVertical: 8, // 👈 VERY IMPORTANT (fixes “line at top” look)
+  header: {
+    color: THEME.text,
+    fontSize: 30,
+    fontWeight: '700',
   },
-  passwordContainer: {
+  subtitle: {
+    color: THEME.textMuted,
+    marginTop: 4,
+    marginBottom: 18,
+  },
+  label: {
+    color: THEME.text,
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  inputWrap: {
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    backgroundColor: '#17171a',
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderColor: '#ccc',
-    marginBottom: 20,
+    marginBottom: 14,
+    gap: 8,
   },
-  passwordInput: {
+  input: {
     flex: 1,
-    paddingVertical: 8, // 👈 fixes alignment inside row
+    color: THEME.text,
   },
-  visibilityToggle: {
-    fontSize: 20,
-    marginLeft: 10,
-    paddingVertical: 8,
+  submitButton: {
+    height: 50,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: THEME.accent,
+    marginTop: 6,
+  },
+  submitDisabled: {
+    opacity: 0.5,
+  },
+  submitText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   linkText: {
-    marginTop: 15,
+    marginTop: 16,
     textAlign: 'center',
-    color: '#666',
+    color: THEME.textMuted,
   },
   link: {
-    color: '#007AFF',
-    fontWeight: 'bold',
+    color: THEME.text,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 });
+
 export default LogIn;

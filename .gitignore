@@ -48,6 +48,7 @@ Encryption/
 #
 *.md
 !README.md
+!AppFlow.md
 
 # fastlane
 #

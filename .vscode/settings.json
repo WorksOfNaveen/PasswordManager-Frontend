@@ -1,4 +1,6 @@
 {
   "java.compile.nullAnalysis.mode": "disabled",
-  "java.configuration.updateBuildConfiguration": "interactive"
+  "java.configuration.updateBuildConfiguration": "interactive",
+  "java.project.sourceExclusions": ["node_modules/**", "android/build/**"],
+  "java.import.exclusions": ["**/node_modules/**", "**/android/build/**"]
 }

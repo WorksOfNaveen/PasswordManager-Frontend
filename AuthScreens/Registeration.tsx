@@ -1,29 +1,44 @@
-import {StyleSheet, Text, View, TextInput, Button, Alert} from 'react-native';
 import React, {useState} from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  Alert,
+  TouchableOpacity,
+  StatusBar,
+} from 'react-native';
+import {Ionicons} from '@react-native-vector-icons/ionicons';
 import {useNavigation} from '@react-navigation/native';
 import apiClient from '../API/AuthApi';
 import {setUpMasterPassword} from '../Encryption/vault';
 import {AuthStore} from '../Store/store';
 
-// 1. Move Interface outside the component
 interface FormData {
   name: string;
   email: string;
   password: string;
 }
 
+const THEME = {
+  bg: '#111113',
+  surface: '#1c1c1f',
+  border: '#2a2a2f',
+  text: '#f5f5f7',
+  textMuted: '#a1a1aa',
+  accent: '#0a84ff',
+};
+
 const Registeration = () => {
   const navigation = useNavigation<any>();
   const setKey = AuthStore(state => state.setKey);
 
-  // 2. Tell useState it's using the FormData interface
   const [fillForm, setfillForm] = useState<FormData>({
     name: '',
     email: '',
     password: '',
   });
   const [mpassword, setmpassword] = useState<string>('');
-  // Add password visibility state
   const [showPassword, setShowPassword] = useState(false);
   const [showMpassword, setShowMpassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -36,7 +51,6 @@ const Registeration = () => {
   }
 
   const registerButton = async (form: FormData) => {
-    // Validation
     if (!form.name || !form.email || !form.password || !mpassword) {
       Alert.alert('Error', 'Please fill all fields');
       return;
@@ -49,7 +63,6 @@ const Registeration = () => {
 
     setLoading(true);
     try {
-      // get the key and auth from the setUpMasterPassword
       const {key, auth} = setUpMasterPassword(mpassword);
 
       const completeData = {
@@ -67,78 +80,109 @@ const Registeration = () => {
         'Registration Failed',
         error.response?.data?.message || error.message,
       );
-      console.error('Error:', error.response?.data || error.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={styles.wholeContainer}>
-      <View style={styles.container}>
-        <Text style={styles.header}>Register</Text>
+    <View style={styles.screen}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={THEME.bg}
+        translucent={false}
+      />
 
-        <Text>Full Name</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Full Name"
-          value={fillForm.name}
-          onChangeText={text => updateField('name', text)}
-          autoCapitalize="words"
-        />
+      <View style={styles.card}>
+        <Text style={styles.header}>Create Account</Text>
+        <Text style={styles.subtitle}>
+          Register and secure your vault with a master password
+        </Text>
 
-        <Text>Email</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Email Address"
-          value={fillForm.email}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="email-address"
-          onChangeText={text => updateField('email', text)}
-        />
+        <Text style={styles.label}>Full Name</Text>
+        <View style={styles.inputWrap}>
+          <Ionicons name="person-outline" size={18} color={THEME.textMuted} />
+          <TextInput
+            style={styles.input}
+            placeholder="Full Name"
+            placeholderTextColor={THEME.textMuted}
+            value={fillForm.name}
+            autoCapitalize="words"
+            onChangeText={text => updateField('name', text)}
+          />
+        </View>
 
-        <Text>Password</Text>
-        <View style={styles.passwordContainer}>
+        <Text style={styles.label}>Email</Text>
+        <View style={styles.inputWrap}>
+          <Ionicons name="mail-outline" size={18} color={THEME.textMuted} />
+          <TextInput
+            style={styles.input}
+            placeholder="Email Address"
+            placeholderTextColor={THEME.textMuted}
+            value={fillForm.email}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            onChangeText={text => updateField('email', text)}
+          />
+        </View>
+
+        <Text style={styles.label}>Password</Text>
+        <View style={styles.inputWrap}>
+          <Ionicons
+            name="lock-closed-outline"
+            size={18}
+            color={THEME.textMuted}
+          />
           <TextInput
             placeholder="Password"
-            style={styles.passwordInput}
+            placeholderTextColor={THEME.textMuted}
+            style={styles.input}
             value={fillForm.password}
             autoCapitalize="none"
             autoCorrect={false}
             onChangeText={text => updateField('password', text)}
             secureTextEntry={!showPassword}
           />
-          <Text
-            style={styles.visibilityToggle}
-            onPress={() => setShowPassword(!showPassword)}>
-            {showPassword ? '👁️' : '🙈'}
-          </Text>
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <Ionicons
+              name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+              size={18}
+              color={THEME.textMuted}
+            />
+          </TouchableOpacity>
         </View>
 
-        <Text>Master Password</Text>
-        <View style={styles.passwordContainer}>
+        <Text style={styles.label}>Master Password</Text>
+        <View style={styles.inputWrap}>
+          <Ionicons name="key-outline" size={18} color={THEME.textMuted} />
           <TextInput
             placeholder="Master Password"
-            style={styles.passwordInput}
+            placeholderTextColor={THEME.textMuted}
+            style={styles.input}
             value={mpassword}
             autoCapitalize="none"
             autoCorrect={false}
             onChangeText={setmpassword}
             secureTextEntry={!showMpassword}
           />
-          <Text
-            style={styles.visibilityToggle}
-            onPress={() => setShowMpassword(!showMpassword)}>
-            {showMpassword ? '👁️' : '🙈'}
-          </Text>
+          <TouchableOpacity onPress={() => setShowMpassword(!showMpassword)}>
+            <Ionicons
+              name={showMpassword ? 'eye-outline' : 'eye-off-outline'}
+              size={18}
+              color={THEME.textMuted}
+            />
+          </TouchableOpacity>
         </View>
 
-        <Button
-          title={loading ? 'Registering...' : 'Register'}
+        <TouchableOpacity
+          style={[styles.submitButton, loading && styles.submitDisabled]}
           onPress={() => registerButton(fillForm)}
-          disabled={loading}
-        />
+          disabled={loading}>
+          <Text style={styles.submitText}>
+            {loading ? 'Registering...' : 'Register'}
+          </Text>
+        </TouchableOpacity>
 
         <Text style={styles.linkText}>
           Already have an account?{' '}
@@ -154,60 +198,74 @@ const Registeration = () => {
 export default Registeration;
 
 const styles = StyleSheet.create({
-  wholeContainer: {
+  screen: {
     flex: 1,
-    justifyContent: 'center', // vertical center
-    alignItems: 'center', // horizontal center
-    backgroundColor: '#f2f2f2', // 👈 helps visually confirm centering
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    backgroundColor: THEME.bg,
   },
-
-  container: {
-    width: '85%',
-    padding: 20,
-    borderRadius: 10,
-    backgroundColor: '#fff',
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    backgroundColor: THEME.surface,
+    padding: 18,
   },
   header: {
-    fontSize: 16,
-    letterSpacing: 2,
-    color: '#000000',
+    color: THEME.text,
+    fontSize: 30,
     fontWeight: '700',
-    textTransform: 'uppercase',
-    marginBottom: 20,
-    textAlign: 'center',
   },
-  input: {
-    borderBottomWidth: 1,
-    borderColor: '#ccc', // 👈 avoids harsh black lines
-    marginBottom: 20,
-    paddingVertical: 8, // 👈 VERY IMPORTANT (fixes “line at top” look)
+  subtitle: {
+    color: THEME.textMuted,
+    marginTop: 4,
+    marginBottom: 18,
   },
-
-  passwordContainer: {
+  label: {
+    color: THEME.text,
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  inputWrap: {
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    backgroundColor: '#17171a',
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderColor: '#ccc',
-    marginBottom: 20,
+    marginBottom: 14,
+    gap: 8,
   },
-
-  passwordInput: {
+  input: {
     flex: 1,
-    paddingVertical: 8, // 👈 fixes alignment inside row
+    color: THEME.text,
   },
-
-  visibilityToggle: {
-    fontSize: 20,
-    marginLeft: 10,
-    paddingVertical: 8,
+  submitButton: {
+    height: 50,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: THEME.accent,
+    marginTop: 6,
+  },
+  submitDisabled: {
+    opacity: 0.65,
+  },
+  submitText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   linkText: {
-    marginTop: 15,
+    marginTop: 16,
     textAlign: 'center',
-    color: '#666',
+    color: THEME.textMuted,
   },
   link: {
-    color: '#007AFF',
-    fontWeight: 'bold',
+    color: THEME.text,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 });

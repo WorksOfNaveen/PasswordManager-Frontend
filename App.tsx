@@ -1,20 +1,31 @@
 import React, {useEffect, useState} from 'react';
-import {NavigationContainer} from '@react-navigation/native';
+import {NavigationContainer, DefaultTheme} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {RootStackParamList} from './Types/types.ts';
 import LogIn from './AuthScreens/LogIn.tsx';
 import {AuthStore} from './Store/store';
 import {KeychainManager} from './Store/KeyChainStorage.js';
 import apiClient from './API/AuthApi.js';
-import {ActivityIndicator, StyleSheet, View, Alert} from 'react-native';
+import {ActivityIndicator, StyleSheet, View} from 'react-native';
 import ListScreen from './Screens/ListScreen.tsx';
 import ModalItem from './Components/modalItem.tsx';
 import Registeration from './AuthScreens/Registeration.tsx';
 import MasterPassword from './AuthScreens/MasterPassword.tsx';
+// import BlurPlaygroundScreen from './Screens/BlurPlaygroundScreen.tsx';
 // 1. Move this outside the component to prevent unnecessary re-renders
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const BASE_BG = '#030B1A';
+const AppTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: BASE_BG,
+  },
+};
 
+// Root app component
 const App = () => {
+  // Get auth state
   const isLogged = AuthStore(state => state.isLogged);
   const setLogged = AuthStore(state => state.setLogged);
   const setAuthData = AuthStore(state => state.setAuthData);
@@ -22,85 +33,108 @@ const App = () => {
   const [showMasterPassword, setShowMasterPassword] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
+    // Load stored tokens on startup
     const checkAuth = async () => {
       try {
-        console.log('[App] Checking authentication status...');
+        // console.log('[App] Checking authentication status...');
         const {accessToken, refreshToken} = await KeychainManager.getTokens();
-        if (!accessToken || !refreshToken) {
-          console.log('[App] No tokens found - showing login screen');
-          setLogged(false);
-          setShowMasterPassword(false);
-          return;
-        }
 
-        console.log('[App] Tokens found - verifying validity');
-        // Tokens exist, verify they're still valid
-        const meResponse = await apiClient.get('/auth/me');
-        console.log('[App] Tokens are valid - fetching auth data');
-
-        // Fetch auth data (salt and verifyHash) for master password screen
-        let authData = null;
-
-        try {
-          // Try the dedicated auth data endpoint first
-          const authDataResponse = await apiClient.get('/auth/me/authData');
-          console.log('[App] Auth data response:', authDataResponse?.data);
-
-          if (
-            authDataResponse?.data &&
-            authDataResponse.data.salt &&
-            authDataResponse.data.verifyHash
-          ) {
-            authData = {
-              salt: authDataResponse.data.salt,
-              verifyHash: authDataResponse.data.verifyHash,
-            };
+        // If we have neither token, user is logged out.
+        // Don't require *both* here: a missing access token can be refreshed using the refresh token.
+        if (!accessToken && !refreshToken) {
+          // console.log('[App] No tokens found - showing login screen');
+          if (!cancelled) {
+            setLogged(false);
+            setShowMasterPassword(false);
           }
-        } catch (authError: any) {
-          console.warn(
-            '[App] Auth data endpoint failed:',
-            authError?.response?.status,
-            authError?.message,
-          );
-        }
-
-        // Fallback: check if /auth/me returns the auth data directly
-        if (
-          !authData &&
-          meResponse?.data?.salt &&
-          meResponse?.data?.verifyHash
-        ) {
-          console.log('[App] Found auth data in /auth/me response');
-          authData = {
-            salt: meResponse.data.salt,
-            verifyHash: meResponse.data.verifyHash,
-          };
-        }
-
-        if (!authData || !authData.salt || !authData.verifyHash) {
-          console.error(
-            '[App] Auth data missing after all attempts:',
-            authData,
-          );
-          Alert.alert('Error', 'Failed to load auth data. Please login again.');
-          setLogged(false);
-          setShowMasterPassword(false);
           return;
         }
 
-        console.log('[App] Auth data fetched successfully');
-        setAuthData(authData);
+        // Prefer cached auth data from Keychain (avoids depending on a backend endpoint on cold start)
+        const cachedAuthData = await KeychainManager.getAuthData();
+        if (!cancelled) {
+          if (cachedAuthData?.salt && cachedAuthData?.verifyHash) {
+            setAuthData(cachedAuthData);
+          }
 
-        // Tokens are valid, now show Master Password screen
-        console.log('[App] Showing master password screen');
-        setShowMasterPassword(true);
-        setLogged(false); // Keep isLogged false until Master Password is verified
+          // Auto-login UX: if tokens exist, route to Master Password screen.
+          // Token validity + authData hydration happens in the background.
+          setShowMasterPassword(true);
+          setLogged(false); // Keep isLogged false until Master Password is verified
+        }
+
+        // Background validation/hydration (don’t block routing)
+        (async () => {
+          try {
+            const meResponse = await apiClient.get('/auth/me');
+
+            let authData = cachedAuthData;
+
+            if (!authData) {
+              try {
+                const authDataResponse = await apiClient.get(
+                  '/auth/me/authData',
+                );
+                if (
+                  authDataResponse?.data &&
+                  authDataResponse.data.salt &&
+                  authDataResponse.data.verifyHash
+                ) {
+                  authData = {
+                    salt: authDataResponse.data.salt,
+                    verifyHash: authDataResponse.data.verifyHash,
+                  };
+                }
+              } catch (authError: any) {
+                // console.warn(
+                //   '[App] Auth data endpoint failed:',
+                //   authError?.response?.status,
+                //   authError?.message,
+                // );
+              }
+            }
+
+            if (
+              !authData &&
+              meResponse?.data?.salt &&
+              meResponse?.data?.verifyHash
+            ) {
+              authData = {
+                salt: meResponse.data.salt,
+                verifyHash: meResponse.data.verifyHash,
+              };
+            }
+
+            if (authData?.salt && authData?.verifyHash) {
+              await KeychainManager.saveAuthData(authData);
+              if (!cancelled) {
+                setAuthData(authData);
+              }
+            }
+          } catch (e: any) {
+            const status = e?.response?.status;
+            // If backend definitively says unauthorized, clear tokens and show Login.
+            if (status === 401 || status === 403) {
+              await KeychainManager.clearAllTokens();
+              if (!cancelled) {
+                setLogged(false);
+                setShowMasterPassword(false);
+              }
+            }
+          }
+        })();
       } catch (error) {
-        console.log('[App] Auth check failed:', error);
-        setLogged(false);
-        setShowMasterPassword(false);
+        // console.log('[App] Auth check failed:', error);
+        if (!cancelled) {
+          setLogged(false);
+          setShowMasterPassword(false);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
@@ -108,17 +142,19 @@ const App = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Show loading indicator during startup
   if (loading) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#e8f3ff" />
       </View>
     );
   }
+
+  // Render navigation stack
   return (
-    // 2. NavigationContainer must wrap your entire navigation tree
-    <NavigationContainer>
-      <Stack.Navigator>
+    <NavigationContainer theme={AppTheme}>
+      <Stack.Navigator screenOptions={{contentStyle: {backgroundColor: BASE_BG}}}>
         {isLogged ? (
           // User is fully logged in with Master Password verified
           <>
@@ -163,5 +199,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: BASE_BG,
   },
 });

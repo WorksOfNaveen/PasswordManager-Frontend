@@ -20,4 +20,5 @@ export type RootStackParamList = {
   ListScreen: undefined;
   modalItem: {data?: ModalDetails} | undefined;
   MasterPassword: undefined;
+  BlurPlaygroundScreen: undefined;
 };
