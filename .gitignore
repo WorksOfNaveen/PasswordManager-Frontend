@@ -50,6 +50,7 @@ Encryption/
 !README.md
 !AppFlow.md
 
+
 # fastlane
 #
 # It is recommended to not store the screenshots in the git repo. Instead, use fastlane to re-generate the
@@ -82,3 +83,6 @@ Encryption/
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+#cursor rules
+.cursor

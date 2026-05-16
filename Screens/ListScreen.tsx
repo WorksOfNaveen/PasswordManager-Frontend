@@ -1,4 +1,4 @@
-import React, {useEffect, useCallback} from 'react';
+import React, {useEffect, useCallback, useState} from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Alert,
   SafeAreaView,
   StatusBar,
+  TextInput,
 } from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {Ionicons} from '@react-native-vector-icons/ionicons';
@@ -38,7 +39,7 @@ export default function ListScreen({navigation}: Props) {
   const {passwords, fetchPasswords, deletePassword, clearPasswords} =
     usePasswordStore();
   const logout = AuthStore(state => state.logout);
-
+  const [search, setSearch] = useState('');
   const handleLogout = useCallback(() => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       {text: 'Cancel', onPress: () => {}, style: 'cancel'},
@@ -67,6 +68,10 @@ export default function ListScreen({navigation}: Props) {
     });
     fetchPasswords();
   }, [navigation, fetchPasswords]);
+
+  const filteredList = passwords.filter(pwd =>
+    pwd.domain.toLowerCase().includes(search.toLowerCase()),
+  );
 
   const renderCard = ({item}: {item: (typeof passwords)[number]}) => (
     <TouchableOpacity
@@ -121,14 +126,17 @@ export default function ListScreen({navigation}: Props) {
           <LogoutHeaderButton onPress={handleLogout} />
         </View>
 
-        <View style={styles.searchWrap}>
-          <Ionicons name="search-outline" size={18} color={THEME.textMuted} />
-          <Text style={styles.searchText}>Search passwords...</Text>
-          <Ionicons name="options-outline" size={18} color={THEME.textMuted} />
-        </View>
-
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search passwords..."
+          placeholderTextColor={THEME.textMuted}
+          value={search}
+          onChangeText={text => setSearch(text)}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
         <FlatList
-          data={passwords}
+          data={filteredList}
           keyExtractor={item => item._id}
           numColumns={2}
           columnWrapperStyle={styles.row}
@@ -195,22 +203,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  searchWrap: {
+  searchInput: {
     height: 50,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: THEME.border,
     backgroundColor: THEME.surfaceMuted,
-    flexDirection: 'row',
-    alignItems: 'center',
+    color: THEME.text,
+    fontSize: 15,
     paddingHorizontal: 14,
     marginBottom: 12,
-  },
-  searchText: {
-    flex: 1,
-    color: THEME.textMuted,
-    marginLeft: 8,
-    fontSize: 15,
   },
   listContent: {
     paddingBottom: 96,

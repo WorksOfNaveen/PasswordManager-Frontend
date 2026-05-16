@@ -101,7 +101,7 @@ const usePasswordStore = create<passwordStore>(set => ({
   },
   updatePassword: async (id, data) => {
     try {
-      const res = await apiClient.put(`/passwords/${id}`, data);
+      const res = await apiClient.put(`/pwd/updatePwd/${id}`, data);
 
       set(state => ({
         passwords: state.passwords.map(item =>

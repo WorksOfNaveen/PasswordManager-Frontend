@@ -154,12 +154,17 @@ const App = () => {
   // Render navigation stack
   return (
     <NavigationContainer theme={AppTheme}>
-      <Stack.Navigator screenOptions={{contentStyle: {backgroundColor: BASE_BG}}}>
+      <Stack.Navigator
+        screenOptions={{contentStyle: {backgroundColor: BASE_BG}}}>
         {isLogged ? (
           // User is fully logged in with Master Password verified
           <>
             <Stack.Screen name="ListScreen" component={ListScreen} />
-            <Stack.Screen name="modalItem" component={ModalItem} />
+            <Stack.Screen
+              name="modalItem"
+              component={ModalItem}
+              options={{headerShown: false}}
+            />
           </>
         ) : showMasterPassword ? (
           // Tokens are valid but Master Password not verified yet

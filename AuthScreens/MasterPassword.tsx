@@ -13,7 +13,8 @@ import {verifyMasterPassword} from '../Encryption/vault';
 import {KeychainManager} from '../Store/KeyChainStorage';
 import apiClient from '../API/AuthApi';
 import {useNavigation} from '@react-navigation/native';
-import {Ionicons} from '@react-native-vector-icons/ionicons';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
+
 
 const THEME = {
   bg: '#111113',

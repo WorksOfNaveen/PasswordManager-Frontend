@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useMemo, useState} from 'react';
 import {
   StyleSheet,
   Text,
@@ -13,6 +13,8 @@ import {useNavigation} from '@react-navigation/native';
 import apiClient from '../API/AuthApi';
 import {setUpMasterPassword} from '../Encryption/vault';
 import {AuthStore} from '../Store/store';
+import {ProgressBar, strengthTierLabel} from '../Components/ProgressBar';
+import {passwordStrength01} from '../utils/passwordStrength';
 
 interface FormData {
   name: string;
@@ -42,6 +44,35 @@ const Registeration = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showMpassword, setShowMpassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const passwordStrength = useMemo(
+    () => passwordStrength01(fillForm.password),
+    [fillForm.password],
+  );
+  const MasterPasswordStrength = useMemo(
+    () => passwordStrength01(mpassword),
+    [mpassword],
+  );
+  const strengthFillColor = useMemo(() => {
+    switch (strengthTierLabel(passwordStrength)) {
+      case 'Weak':
+        return '#ff453a';
+      case 'Medium':
+        return '#ff9f0a';
+      default:
+        return '#30d158';
+    }
+  }, [passwordStrength]);
+  const strengthFillMasterColor = useMemo(() => {
+    switch (strengthTierLabel(MasterPasswordStrength)) {
+      case 'Weak':
+        return '#ff453a';
+      case 'Medium':
+        return '#ff9f0a';
+      default:
+        return '#30d158';
+    }
+  }, [MasterPasswordStrength]);
 
   function updateField(name: keyof FormData, value: string): void {
     setfillForm(prevState => ({
@@ -152,6 +183,12 @@ const Registeration = () => {
             />
           </TouchableOpacity>
         </View>
+        <ProgressBar
+          progress={passwordStrength}
+          fillColor={strengthFillColor}
+          showStrengthLabel
+          style={styles.passwordStrengthBar}
+        />
 
         <Text style={styles.label}>Master Password</Text>
         <View style={styles.inputWrap}>
@@ -174,6 +211,12 @@ const Registeration = () => {
             />
           </TouchableOpacity>
         </View>
+        <ProgressBar
+          progress={MasterPasswordStrength}
+          fillColor={strengthFillMasterColor}
+          showStrengthLabel
+          style={styles.passwordStrengthBar}
+        />
 
         <TouchableOpacity
           style={[styles.submitButton, loading && styles.submitDisabled]}
@@ -241,6 +284,10 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     color: THEME.text,
+  },
+  passwordStrengthBar: {
+    marginTop: -6,
+    marginBottom: 14,
   },
   submitButton: {
     height: 50,
