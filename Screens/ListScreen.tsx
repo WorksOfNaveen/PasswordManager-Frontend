@@ -49,17 +49,13 @@ export default function ListScreen({navigation}: Props) {
           try {
             clearPasswords();
             await logout();
-            navigation.reset({
-              index: 0,
-              routes: [{name: 'LogIn'}],
-            });
           } catch (error) {
             Alert.alert('Error', 'Failed to logout properly');
           }
         },
       },
     ]);
-  }, [logout, clearPasswords, navigation]);
+  }, [logout, clearPasswords]);
 
   useEffect(() => {
     navigation.setOptions({

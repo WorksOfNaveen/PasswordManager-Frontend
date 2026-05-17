@@ -9,12 +9,10 @@ import {
   StatusBar,
 } from 'react-native';
 import {AuthStore} from '../Store/store';
-import {verifyMasterPassword} from '../Encryption/vault';
 import {KeychainManager} from '../Store/KeyChainStorage';
 import apiClient from '../API/AuthApi';
-import {useNavigation} from '@react-navigation/native';
-import { Ionicons } from '@react-native-vector-icons/ionicons';
-
+import {Ionicons} from '@react-native-vector-icons/ionicons';
+import VaultUnlockLoading from '../Components/VaultUnlockLoading';
 
 const THEME = {
   bg: '#111113',
@@ -29,11 +27,9 @@ const MasterPassword = () => {
   const [showMpassword, setShowMpassword] = useState(false);
   const [mpassword, setmpassword] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
-  const navigation = useNavigation<any>();
+  const [isUnlocking, setIsUnlocking] = useState(false);
 
   const auth = AuthStore(state => state.authData);
-  const setLog = AuthStore(state => state.setLogged);
-  const setKey = AuthStore(state => state.setKey);
   const setAuthData = AuthStore(state => state.setAuthData);
 
   useEffect(() => {
@@ -80,27 +76,17 @@ const MasterPassword = () => {
   };
 
   const handleProceed = () => {
-    if (!auth || !auth.salt || !auth.verifyHash) {
-      Alert.alert('Error', 'Auth data missing. Please login again.');
-      return;
-    }
-
-    const key = verifyMasterPassword(mpassword, auth);
-    if (!key) {
-      Alert.alert('Error', 'Master password is incorrect. Please try again.');
-      return;
-    }
-
-    setKey(key);
-    setLog(true);
-
-    setTimeout(() => {
-      navigation.reset({
-        index: 0,
-        routes: [{name: 'ListScreen'}],
-      });
-    }, 200);
+    setIsUnlocking(true);
   };
+
+  if (isUnlocking) {
+    return (
+      <VaultUnlockLoading
+        masterPassword={mpassword}
+        onUnlockFailed={() => setIsUnlocking(false)}
+      />
+    );
+  }
 
   if (isLoading) {
     return (
@@ -156,7 +142,8 @@ const MasterPassword = () => {
         <TouchableOpacity
           style={[styles.submitButton, isLoading && styles.submitDisabled]}
           onPress={handleProceed}
-          disabled={isLoading}>
+          // disabled={isLoading}
+        >
           <Text style={styles.submitText}>Decrypt</Text>
         </TouchableOpacity>
       </View>

@@ -3,34 +3,33 @@ import {Platform} from 'react-native';
 import {KeychainManager} from '../Store/KeyChainStorage';
 
 // Refresh token endpoint candidates
-const REFRESH_ENDPOINT_CANDIDATES = [
-  '/refresh',
-  '/auth/refresh',
-  '/auth/refreshToken',
-  '/auth/refresh-token',
-];
+const REFRESH_ENDPOINT_CANDIDATES = '/auth/refreshToken';
 
-// Retry refresh with multiple endpoints
 const tryRefresh = async (baseURL, refreshToken) => {
-  let lastError;
-  for (const path of REFRESH_ENDPOINT_CANDIDATES) {
-    try {
-      const res = await axios.post(`${baseURL}${path}`, {
-        refreshToken,
-      });
-      return res;
-    } catch (e) {
-      lastError = e;
-      // If endpoint doesn't exist, try the next one
-      const status = e?.response?.status;
-      if (status === 404) {
-        continue;
-      }
-      // For other errors (401/403/network), stop and surface it
-      throw e;
-    }
+  return axios.post(`${baseURL}${REFRESH_ENDPOINT_CANDIDATES}`, {
+    refreshToken,
+  });
+};
+
+export const ensureSessionFromRefresh = async () => {
+  const refreshToken = await KeychainManager.getRefreshToken();
+  if (!refreshToken) {
+    await KeychainManager.clearAllTokens();
+    return false;
   }
-  throw lastError;
+
+  try {
+    const res = await tryRefresh(apiClient.defaults.baseURL, refreshToken);
+    const {refreshToken: newRefresh, accessToken} = res.data;
+    await KeychainManager.saveTokens(accessToken, newRefresh);
+    return true;
+  } catch (err) {
+    const status = err?.response?.status;
+    if (status === 401 || status === 403) {
+      await KeychainManager.clearAllTokens();
+    }
+    return false;
+  }
 };
 
 // HTTP client with auto-refresh

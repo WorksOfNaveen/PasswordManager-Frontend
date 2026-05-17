@@ -5,7 +5,7 @@ import {RootStackParamList} from './Types/types.ts';
 import LogIn from './AuthScreens/LogIn.tsx';
 import {AuthStore} from './Store/store';
 import {KeychainManager} from './Store/KeyChainStorage.js';
-import apiClient from './API/AuthApi.js';
+import {ensureSessionFromRefresh} from './API/AuthApi.js';
 import {ActivityIndicator, StyleSheet, View} from 'react-native';
 import ListScreen from './Screens/ListScreen.tsx';
 import ModalItem from './Components/modalItem.tsx';
@@ -29,8 +29,9 @@ const App = () => {
   const isLogged = AuthStore(state => state.isLogged);
   const setLogged = AuthStore(state => state.setLogged);
   const setAuthData = AuthStore(state => state.setAuthData);
+  const setShowMasterPassword = AuthStore(state => state.setShowMasterPassword);
+  const showMasterPassword = AuthStore(state => state.showMasterPassword);
   const [loading, setLoading] = useState(true);
-  const [showMasterPassword, setShowMasterPassword] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,93 +39,24 @@ const App = () => {
     // Load stored tokens on startup
     const checkAuth = async () => {
       try {
-        // console.log('[App] Checking authentication status...');
-        const {accessToken, refreshToken} = await KeychainManager.getTokens();
-
-        // If we have neither token, user is logged out.
-        // Don't require *both* here: a missing access token can be refreshed using the refresh token.
-        if (!accessToken && !refreshToken) {
-          // console.log('[App] No tokens found - showing login screen');
+        const sessionOk = await ensureSessionFromRefresh();
+        if (!sessionOk) {
           if (!cancelled) {
             setLogged(false);
             setShowMasterPassword(false);
+            setAuthData(null);
           }
           return;
         }
 
-        // Prefer cached auth data from Keychain (avoids depending on a backend endpoint on cold start)
         const cachedAuthData = await KeychainManager.getAuthData();
         if (!cancelled) {
           if (cachedAuthData?.salt && cachedAuthData?.verifyHash) {
             setAuthData(cachedAuthData);
           }
-
-          // Auto-login UX: if tokens exist, route to Master Password screen.
-          // Token validity + authData hydration happens in the background.
           setShowMasterPassword(true);
-          setLogged(false); // Keep isLogged false until Master Password is verified
+          setLogged(false);
         }
-
-        // Background validation/hydration (don’t block routing)
-        (async () => {
-          try {
-            const meResponse = await apiClient.get('/auth/me');
-
-            let authData = cachedAuthData;
-
-            if (!authData) {
-              try {
-                const authDataResponse = await apiClient.get(
-                  '/auth/me/authData',
-                );
-                if (
-                  authDataResponse?.data &&
-                  authDataResponse.data.salt &&
-                  authDataResponse.data.verifyHash
-                ) {
-                  authData = {
-                    salt: authDataResponse.data.salt,
-                    verifyHash: authDataResponse.data.verifyHash,
-                  };
-                }
-              } catch (authError: any) {
-                // console.warn(
-                //   '[App] Auth data endpoint failed:',
-                //   authError?.response?.status,
-                //   authError?.message,
-                // );
-              }
-            }
-
-            if (
-              !authData &&
-              meResponse?.data?.salt &&
-              meResponse?.data?.verifyHash
-            ) {
-              authData = {
-                salt: meResponse.data.salt,
-                verifyHash: meResponse.data.verifyHash,
-              };
-            }
-
-            if (authData?.salt && authData?.verifyHash) {
-              await KeychainManager.saveAuthData(authData);
-              if (!cancelled) {
-                setAuthData(authData);
-              }
-            }
-          } catch (e: any) {
-            const status = e?.response?.status;
-            // If backend definitively says unauthorized, clear tokens and show Login.
-            if (status === 401 || status === 403) {
-              await KeychainManager.clearAllTokens();
-              if (!cancelled) {
-                setLogged(false);
-                setShowMasterPassword(false);
-              }
-            }
-          }
-        })();
       } catch (error) {
         // console.log('[App] Auth check failed:', error);
         if (!cancelled) {
@@ -143,7 +75,7 @@ const App = () => {
   }, []);
 
   // Show loading indicator during startup
-  if (loading) {
+  if (loading === true) {
     return (
       <View style={styles.loader}>
         <ActivityIndicator size="large" color="#e8f3ff" />
@@ -168,11 +100,13 @@ const App = () => {
           </>
         ) : showMasterPassword ? (
           // Tokens are valid but Master Password not verified yet
-          <Stack.Screen
-            name="MasterPassword"
-            component={MasterPassword}
-            options={{headerShown: false}}
-          />
+          <>
+            <Stack.Screen
+              name="MasterPassword"
+              component={MasterPassword}
+              options={{headerShown: false}}
+            />
+          </>
         ) : (
           // No tokens - show auth screens
           <>
@@ -184,11 +118,6 @@ const App = () => {
             <Stack.Screen
               name="Registeration"
               component={Registeration}
-              options={{headerShown: false}}
-            />
-            <Stack.Screen
-              name="MasterPassword"
-              component={MasterPassword}
               options={{headerShown: false}}
             />
           </>

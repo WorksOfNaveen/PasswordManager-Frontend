@@ -11,7 +11,9 @@ interface globalState {
   isLogged: boolean;
   authData: AuthDataType | null;
   key: string | null;
+  showMasterPassword: boolean;
   setLogged: (value: boolean) => void;
+  setShowMasterPassword: (value: boolean) => void;
   setAuthData: (data: AuthDataType | null) => void;
   setKey: (key: string | null) => void;
   logout: () => Promise<void>;
@@ -39,9 +41,14 @@ const AuthStore = create<globalState>(set => ({
   isLogged: false,
   authData: null,
   key: null,
+  showMasterPassword: false,
 
   // Set login status
   setLogged: value => set({isLogged: value}),
+
+  // show master password screen
+  setShowMasterPassword: value => set({showMasterPassword: value}),
+
   // Set auth verification data
   setAuthData: data => set({authData: data}),
   // Set derived vault key
@@ -55,7 +62,12 @@ const AuthStore = create<globalState>(set => ({
 
       // 🧹 Clear Zustand store state
       // console.log('[AuthStore.logout] Clearing store state...');
-      set({isLogged: false, key: null, authData: null});
+      set({
+        isLogged: false,
+        key: null,
+        authData: null,
+        showMasterPassword: false,
+      });
 
       // console.log(
       //   '[AuthStore.logout] Logout complete - all sensitive data cleared',
@@ -63,7 +75,12 @@ const AuthStore = create<globalState>(set => ({
     } catch (error) {
       // console.error('[AuthStore.logout] Error during logout:', error);
       // Still clear store state even if Keychain fails
-      set({isLogged: false, key: null, authData: null});
+      set({
+        isLogged: false,
+        key: null,
+        authData: null,
+        showMasterPassword: false,
+      });
     }
   },
 }));

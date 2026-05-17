@@ -40,6 +40,7 @@ const THEME = {
 };
 
 const LogIn = () => {
+  const setShowMasterPassword = AuthStore(state => state.setShowMasterPassword);
   const [form, setForm] = useState<FormData>({
     email: '',
     password: '',
@@ -83,7 +84,7 @@ const LogIn = () => {
           {
             text: 'OK',
             onPress: () => {
-              navigation.navigate('MasterPassword');
+              setShowMasterPassword(true);
             },
           },
         ]);
